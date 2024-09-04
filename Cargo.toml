@@ -1,0 +1,15 @@
+[package]
+name = "spotifystats"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rspotify = { version = "0.13.2", features = ["cli"] }
+tokio = "1.39.3"
+mini-redis = "0.4"
+env_logger = "0.11.5"
+dotenvy = "0.15.7"
+futures = "0.3.30"
+futures-util = "0.3.30"
+
+
