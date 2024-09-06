@@ -1,7 +1,13 @@
 pub mod client;
-use client::{auth, get_top_artists, get_top_tracks, get_user_display_name};
+use core::panic;
+
+use client::{get_top_tracks, Client};
 use dotenvy::dotenv;
 use rspotify::{model::TimeRange, Credentials};
+
+fn get_env_var(key: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| panic!("Variable not found: {}", key))
+}
 
 #[tokio::main]
 async fn main() {
@@ -9,45 +15,37 @@ async fn main() {
 
     let id = get_env_var("RSPOTIFY_CLIENT_ID");
     let secret = get_env_var("RSPOTIFY_CLIENT_SECRET");
+    let redirect_uri = get_env_var("RSPOTIFY_REDIRECT_URI");
 
-    let _redirect_uri = String::from("http://localhost:8080/callback");
-
-    let creds = Credentials {
-        id,
-        secret: Some(secret),
+    let client = Client {
+        creds: Credentials {
+            id,
+            secret: Some(secret),
+        },
+        redirect_uri,
     };
 
-    let client = auth(creds).await;
+    let authenticated_client = client.auth().await.unwrap_or_else(|| panic!("Client not authenticated."));
 
-    let display_name = get_user_display_name(&client).await;
+    match get_top_tracks(&authenticated_client, TimeRange::LongTerm, 8).await {
+        Ok(top_tracks) => {
+            for track in top_tracks {
+                let song_name = track.name;
+                let artists: Vec<String> = track
+                    .artists
+                    .iter()
+                    .map(|artist| artist.name.clone())
+                    .collect();
 
-    println!("{}'s top tracks:\n", display_name);
-
-    let limit: u8 = 10;
-    let time_range = TimeRange::ShortTerm;
-    let user_top_tracks = get_top_tracks(&client, time_range, limit).await;
-
-    for track in user_top_tracks {
-        let song_name = track.name;
-        let artists: Vec<String> = track
-            .artists
-            .iter()
-            .map(|artist| artist.name.clone())
-            .collect();
-        let artists = artists.join(", ");
-        println!(
-            "{}. {} - {} ({})",
-            track.place, song_name, artists, track.duration
-        );
+                let artists = artists.join(", ");
+                println!(
+                    "{}. {} - {} ({})",
+                    track.place, song_name, artists, track.duration
+                );
+            }
+        }
+        Err(e) => {
+            panic!("Failed to retrieve user's top tracks: {:?}", e);
+        }
     }
-
-    let user_top_artists = get_top_artists(&client, limit).await;
-
-    for artist in user_top_artists {
-        println!("{}. {}", artist.place, artist.name);
-    }
-}
-
-fn get_env_var(key: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| panic!("Variable not found: {}", key))
 }

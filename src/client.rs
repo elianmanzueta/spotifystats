@@ -2,10 +2,10 @@ use chrono::Duration;
 use futures::{pin_mut, TryStreamExt};
 use rspotify::clients::OAuthClient;
 use rspotify::model::{SimplifiedArtist, TimeRange};
-use rspotify::scopes;
+use rspotify::{scopes, ClientError};
 use rspotify::{AuthCodeSpotify, Credentials, OAuth};
 
-async fn format_duration(duration: Duration) -> String {
+fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.num_seconds();
     let minutes = total_seconds / 60;
     let seconds = total_seconds % 60;
@@ -14,23 +14,46 @@ async fn format_duration(duration: Duration) -> String {
     format!("{}:{:02}", minutes, seconds)
 }
 
-pub async fn auth(creds: Credentials) -> AuthCodeSpotify {
-    let oauth = OAuth::from_env(scopes!("user-top-read")).unwrap();
+pub struct Client {
+    pub creds: Credentials,
+    pub redirect_uri: String,
+}
 
-    let spotify = AuthCodeSpotify::new(creds, oauth);
+impl Client {
+    pub async fn auth(&self) -> Option<AuthCodeSpotify> {
+        let oauth = match OAuth::from_env(scopes!("user-top-read")) {
+            Some(oauth) => oauth,
+            None => {
+                println!("Failed to retrieve OAuth from environment.");
+                return None;
+            }
+        };
 
-    if let Ok(url) = spotify.get_authorize_url(true) {
-        spotify.prompt_for_token(&url).await.unwrap();
-    } else {
-        println!("Couldn't perform OAuth authentication.");
+        let spotify = AuthCodeSpotify::new(self.creds.clone(), oauth);
+
+        if let Ok(url) = spotify.get_authorize_url(true) {
+            if let Err(e) = spotify.prompt_for_token(&url).await {
+                println!("Failed to prompt for token: {:?}", e);
+            }
+        } else {
+            println!("Couldn't perform OAuth authentication.");
+        }
+
+        Some(spotify)
     }
-
-    spotify
 }
 
 pub async fn get_user_display_name(client: &AuthCodeSpotify) -> String {
-    let user = client.me().await.unwrap();
-    user.display_name.unwrap()
+    match client.me().await {
+        Ok(user) => match user.display_name {
+            Some(username) => username,
+            None => "Unknown User".to_string(),
+        },
+        Err(e) => {
+            println!("Error fetching user: {:?}", e);
+            "Unknown User".to_string()
+        }
+    }
 }
 
 pub struct TopTrack {
@@ -40,37 +63,25 @@ pub struct TopTrack {
     pub artists: Vec<SimplifiedArtist>,
 }
 
-pub struct TopArtist {
-    pub place: u32,
-    pub name: String,
-}
-
 pub async fn get_top_tracks(
     client: &AuthCodeSpotify,
     time_range: TimeRange,
     limit: u8,
-) -> Vec<TopTrack> {
+) -> Result<Vec<TopTrack>, ClientError> {
     let stream = client.current_user_top_tracks(Some(time_range));
     pin_mut!(stream);
 
     let mut top_tracks: Vec<TopTrack> = Vec::new();
 
-    while let Some(item) = stream.try_next().await.unwrap() {
-        let mut artists: Vec<SimplifiedArtist> = Vec::new();
-
-        for artist in item.artists {
-            artists.push(artist)
-        }
-
+    while let Some(item) = stream.try_next().await? {
         let place = top_tracks.len() as u32 + 1;
-
         let duration = format_duration(item.duration);
 
         top_tracks.push(TopTrack {
             place,
             name: item.name,
-            duration: duration.await,
-            artists,
+            duration,
+            artists: item.artists,
         });
 
         if top_tracks.len() as u8 == limit {
@@ -78,16 +89,24 @@ pub async fn get_top_tracks(
         }
     }
 
-    top_tracks
+    Ok(top_tracks)
 }
 
-pub async fn get_top_artists(client: &AuthCodeSpotify, limit: u8) -> Vec<TopArtist> {
+pub struct TopArtist {
+    pub place: u32,
+    pub name: String,
+}
+
+pub async fn get_top_artists(
+    client: &AuthCodeSpotify,
+    limit: u8,
+) -> Result<Vec<TopArtist>, ClientError> {
     let stream = client.current_user_top_artists(Some(TimeRange::MediumTerm));
     pin_mut!(stream);
 
     let mut top_artists: Vec<TopArtist> = Vec::new();
 
-    while let Some(item) = stream.try_next().await.unwrap() {
+    while let Some(item) = stream.try_next().await? {
         let place = top_artists.len() as u32 + 1;
 
         top_artists.push(TopArtist {
@@ -99,5 +118,5 @@ pub async fn get_top_artists(client: &AuthCodeSpotify, limit: u8) -> Vec<TopArti
             break;
         }
     }
-    top_artists
+    Ok(top_artists)
 }
