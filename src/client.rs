@@ -99,9 +99,10 @@ pub struct TopArtist {
 
 pub async fn get_top_artists(
     client: &AuthCodeSpotify,
+    time_range: TimeRange,
     limit: u8,
 ) -> Result<Vec<TopArtist>, ClientError> {
-    let stream = client.current_user_top_artists(Some(TimeRange::MediumTerm));
+    let stream = client.current_user_top_artists(Some(time_range));
     pin_mut!(stream);
 
     let mut top_artists: Vec<TopArtist> = Vec::new();
