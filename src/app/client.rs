@@ -5,12 +5,15 @@ use rspotify::model::{SimplifiedArtist, TimeRange};
 use rspotify::{scopes, ClientError};
 use rspotify::{AuthCodeSpotify, Credentials, OAuth};
 
+pub fn get_env_var(key: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| panic!("Variable not found: {}", key))
+}
+
 fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.num_seconds();
     let minutes = total_seconds / 60;
     let seconds = total_seconds % 60;
 
-    // Format the string as "minutes:seconds", ensuring seconds are always two digits
     format!("{}:{:02}", minutes, seconds)
 }
 
@@ -31,7 +34,7 @@ impl Client {
 
         let spotify = AuthCodeSpotify::new(self.creds.clone(), oauth);
 
-        if let Ok(url) = spotify.get_authorize_url(true) {
+        if let Ok(url) = spotify.get_authorize_url(false) {
             if let Err(e) = spotify.prompt_for_token(&url).await {
                 println!("Failed to prompt for token: {:?}", e);
             }
