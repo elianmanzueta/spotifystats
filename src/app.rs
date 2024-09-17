@@ -1,17 +1,13 @@
-use client::{get_env_var, get_top_tracks, Client};
+use crate::client::{get_env_var, get_top_tracks, Client};
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use dotenvy::dotenv;
 use ratatui::{
     layout::{Constraint, Layout},
-    style::Stylize,
-    text::Line,
     widgets::{Block, Paragraph},
     DefaultTerminal, Frame,
 };
 use rspotify::{AuthCodeSpotify, Credentials};
-
-pub mod client;
 
 async fn get_client() -> AuthCodeSpotify {
     dotenv().ok();
@@ -37,15 +33,9 @@ async fn get_client() -> AuthCodeSpotify {
 pub struct App {
     /// Is the application running?
     running: bool,
+    auth: bool,
     input: String,
-    input_mode: InputMode,
-}
-
-#[derive(Debug, Default)]
-enum InputMode {
-    #[default]
-    Normal,
-    Editing,
+    tracks: Vec<String>,
 }
 
 impl App {
@@ -72,14 +62,18 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let vertical = Layout::vertical([
             Constraint::Length(4),
-            Constraint::Length(3),
+            Constraint::Length(2),
             Constraint::Min(1),
         ]);
 
         let [help_area, input_area, output_area] = vertical.areas(frame.area());
 
-        let help_text = Paragraph::new("Welcome to Spotify Stats!\nPress ctrl-V to paste your URL.")
-            .block(Block::bordered()).centered();
+        let help_text = Paragraph::new(
+            "Welcome to Spotify Stats!\nPress enter to start the authentication process.",
+        )
+        .block(Block::bordered())
+        .centered();
+
         let input = Paragraph::new("Input here").block(Block::bordered());
         frame.render_widget(help_text, help_area);
         frame.render_widget(input, input_area);
