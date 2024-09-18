@@ -13,16 +13,25 @@ use ratatui::{
 };
 use rspotify::{model::TimeRange, Credentials};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct App {
     running: bool,
-    output: String,
+    output: String, // TODO: Change into vector? Want to make stylized spans. Save whole struct?
+    // username TODO: Get username (or user info?)
+    // query_type TODO: Show something like "{User}'s top {tracks|artists"
+    result_limit: u8,
+    time_range: TimeRange,
 }
 
 impl App {
     /// Construct a new instance of [`App`].
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            running: false,
+            output: "".to_string(),
+            result_limit: 10,
+            time_range: TimeRange::ShortTerm,
+        }
     }
 
     /// Run the application's main loop.
@@ -52,7 +61,7 @@ impl App {
             )
             .centered();
 
-        let area = center(
+        let area = centered_widget(
             frame.area(),
             Constraint::Length(100),
             Constraint::Length(10),
@@ -91,7 +100,13 @@ impl App {
     }
 }
 
-fn center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn centered_widget(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
     let [area] = Layout::horizontal([horizontal])
         .flex(Flex::Center)
         .areas(area);
@@ -104,12 +119,15 @@ async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
     color_eyre::install()?;
 
+    // TODO: Break this stuff up into functions. Move stuff back to app.rs? 
+    // Init
     let id = get_env_var("RSPOTIFY_CLIENT_ID");
     let secret = get_env_var("RSPOTIFY_CLIENT_SECRET");
     let redirect_uri = get_env_var("RSPOTIFY_REDIRECT_URI");
-    let time_range = TimeRange::ShortTerm;
 
     let mut app = App::new();
+    let time_range = app.time_range;
+    let result_limit = app.result_limit;
 
     let cred = Client {
         creds: Credentials {
@@ -126,7 +144,7 @@ async fn main() -> color_eyre::Result<()> {
         }
     };
 
-    let top_tracks = get_top_tracks(&client, time_range, 10).await?;
+    let top_tracks = get_top_tracks(&client, time_range, result_limit).await?;
     let mut tracks = String::new();
 
     for (index, track) in top_tracks.iter().enumerate() {
