@@ -11,7 +11,10 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph},
     DefaultTerminal, Frame,
 };
-use rspotify::{model::TimeRange, Credentials};
+use rspotify::{
+    model::{SimplifiedArtist, TimeRange},
+    AuthCodeSpotify, Credentials,
+};
 
 #[derive(Debug)]
 pub struct App {
@@ -114,20 +117,11 @@ fn centered_widget(area: Rect, horizontal: Constraint, vertical: Constraint) -> 
     area
 }
 
-#[tokio::main]
-async fn main() -> color_eyre::Result<()> {
+async fn authenticate() -> Option<AuthCodeSpotify> {
     dotenv().ok();
-    color_eyre::install()?;
-
-    // TODO: Break this stuff up into functions. Move stuff back to app.rs? 
-    // Init
     let id = get_env_var("RSPOTIFY_CLIENT_ID");
     let secret = get_env_var("RSPOTIFY_CLIENT_SECRET");
     let redirect_uri = get_env_var("RSPOTIFY_REDIRECT_URI");
-
-    let mut app = App::new();
-    let time_range = app.time_range;
-    let result_limit = app.result_limit;
 
     let cred = Client {
         creds: Credentials {
@@ -140,27 +134,68 @@ async fn main() -> color_eyre::Result<()> {
     let client = match cred.auth().await {
         Some(client) => client,
         None => {
-            panic!("!!!")
+            panic!("Authentication failed.")
         }
     };
 
-    let top_tracks = get_top_tracks(&client, time_range, result_limit).await?;
-    let mut tracks = String::new();
+    Some(client)
+}
+
+#[derive(Debug)]
+struct TopTracksResult {
+    index: usize,
+    track_name: String,
+    artists: Vec<String>,
+}
+
+fn get_user(client: &AuthCodeSpotify) {}
+
+fn get_artists(artists: Vec<SimplifiedArtist>) -> Vec<String> {
+    let artists: Vec<String> = artists.iter().map(|artist| artist.name.clone()).collect();
+    artists
+}
+
+async fn run_get_top_tracks(
+    client: &AuthCodeSpotify,
+    time_range: TimeRange,
+    limit: u8,
+) -> Result<Vec<TopTracksResult>> {
+    let top_tracks = get_top_tracks(client, time_range, limit).await?;
+    let mut result: Vec<TopTracksResult> = Vec::new();
 
     for (index, track) in top_tracks.iter().enumerate() {
-        let artist_names = track
-            .artists
-            .iter() // Iterate over the artists
-            .take(2)
-            .map(|artist| artist.name.as_str()) // Map each artist to their name
-            .collect::<Vec<&str>>() // Collect into a Vec<&String>
-            .join(", ");
+        let top_track = TopTracksResult {
+            index: index + 1,
+            track_name: track.name.clone(),
+            artists: get_artists(track.artists.clone()),
+        };
 
-        tracks.push_str(&format!("{} - {} by {}\n", index, track.name, artist_names));
+        result.push(top_track);
     }
 
-    app.output = tracks;
+    Ok(result)
+}
 
+#[tokio::main]
+async fn main() -> color_eyre::Result<()> {
+    dotenv().ok();
+    color_eyre::install()?;
+
+    let mut app = App::new();
+
+    let time_range = app.time_range;
+    let result_limit = app.result_limit;
+
+    let client = if let Some(client) = authenticate().await {
+        client
+    } else {
+        println!("Authentication failed...");
+        return Ok(());
+    };
+
+    let top_tracks = run_get_top_tracks(&client, time_range, result_limit).await?;
+
+    // TUI
     let terminal = ratatui::init();
     let result = app.run(terminal);
     ratatui::restore();
