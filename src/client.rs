@@ -36,7 +36,7 @@ impl Client {
 
         if let Ok(url) = spotify.get_authorize_url(false) {
             if let Err(e) = spotify.prompt_for_token(&url).await {
-                println!("Failed to prompt for token: {:?}", e);
+                println!("{:?}", e);
             }
         } else {
             println!("Couldn't perform OAuth authentication.");
