@@ -59,68 +59,42 @@ pub async fn get_user_display_name(client: &AuthCodeSpotify) -> String {
     }
 }
 
-pub struct TopTrack {
-    pub place: u32,
-    pub name: String,
+pub fn get_artists(artists: Vec<SimplifiedArtist>) -> Vec<String> {
+    let artists: Vec<String> = artists.iter().map(|artist| artist.name.clone()).collect();
+    artists
+}
+
+#[derive(Debug, Clone)]
+pub struct TopTrackResult {
+    pub index: usize,
+    pub track_name: String,
     pub duration: String,
-    pub artists: Vec<SimplifiedArtist>,
+    pub artists: Vec<String>,
 }
 
 pub async fn get_top_tracks(
     client: &AuthCodeSpotify,
     time_range: TimeRange,
     limit: u8,
-) -> Result<Vec<TopTrack>, ClientError> {
+) -> Result<Vec<TopTrackResult>, ClientError> {
     let stream = client.current_user_top_tracks(Some(time_range));
     pin_mut!(stream);
 
-    let mut top_tracks: Vec<TopTrack> = Vec::new();
+    let mut result: Vec<TopTrackResult> = Vec::new();
 
     while let Some(item) = stream.try_next().await? {
-        let place = top_tracks.len() as u32 + 1;
-        let duration = format_duration(item.duration);
+        let top_track = TopTrackResult {
+            index: result.len() + 1,
+            track_name: item.name.clone(),
+            duration: format_duration(item.duration),
+            artists: get_artists(item.artists.clone()),
+        };
 
-        top_tracks.push(TopTrack {
-            place,
-            name: item.name,
-            duration,
-            artists: item.artists,
-        });
-
-        if top_tracks.len() as u8 == limit {
+        if top_track.index as u8 == limit + 1 {
             break;
         }
+        result.push(top_track);
     }
 
-    Ok(top_tracks)
-}
-
-pub struct TopArtist {
-    pub place: u32,
-    pub name: String,
-}
-
-pub async fn get_top_artists(
-    client: &AuthCodeSpotify,
-    time_range: TimeRange,
-    limit: u8,
-) -> Result<Vec<TopArtist>, ClientError> {
-    let stream = client.current_user_top_artists(Some(time_range));
-    pin_mut!(stream);
-
-    let mut top_artists: Vec<TopArtist> = Vec::new();
-
-    while let Some(item) = stream.try_next().await? {
-        let place = top_artists.len() as u32 + 1;
-
-        top_artists.push(TopArtist {
-            place,
-            name: item.name,
-        });
-
-        if top_artists.len() as u8 == limit {
-            break;
-        }
-    }
-    Ok(top_artists)
+    Ok(result)
 }
