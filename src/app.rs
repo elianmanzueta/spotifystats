@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Paragraph},
+    widgets::{block::Title, Block, BorderType, Paragraph},
     DefaultTerminal, Frame,
 };
 
@@ -55,31 +55,38 @@ impl App {
         )
         .split(frame.area());
 
-        let intro = Span::styled(
-            format!("Hello {}!", &self.username),
-            Style::default().fg(Color::Green),
-        );
+        let top_tracks_widget = Self::top_tracks_widget(self);
+        frame.render_widget(top_tracks_widget, layout[1]);
+    }
 
-        let title = Span::styled("Spotify Stats!", Style::default().fg(Color::Green));
+    fn top_tracks_widget(&mut self) -> Paragraph {
+        let username = self.username.clone();
+        let time_range = self.time_range;
+        let time_range = Self::show_time_range(time_range);
+        let output = self.parse_output();
 
-        let title_widget = Paragraph::new(intro)
-            .alignment(Alignment::Center)
+        let widget = Paragraph::new(output)
             .block(
                 Block::bordered()
-                    .title(title)
-                    .fg(Color::Green)
-                    .title_alignment(Alignment::Center)
-                    .border_type(BorderType::Rounded),
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::new().green())
+                    .title(Title::from(format!(
+                        "Top Tracks ({}): {}",
+                        time_range, username
+                    )))
+                    .title_alignment(Alignment::Center),
             )
             .centered();
 
-        let output = self.parse_output();
-        let output = Paragraph::new(output)
-            .block(Block::bordered().border_type(BorderType::Rounded))
-            .centered();
+        widget
+    }
 
-        frame.render_widget(title_widget, layout[0]);
-        frame.render_widget(output, layout[1]);
+    pub fn show_time_range(time_range: TimeRange) -> String {
+        match time_range {
+            TimeRange::ShortTerm => "Short Term".to_string(),
+            TimeRange::MediumTerm => "Medium Term".to_string(),
+            TimeRange::LongTerm => "Long Term".to_string(),
+        }
     }
 
     pub fn parse_output(&mut self) -> Text {
@@ -100,7 +107,7 @@ impl App {
                 ),
                 Span::styled(" - ", Style::default()),
                 Span::styled(track_name, Style::default()),
-                Span::styled(" by ", Style::default()),
+                Span::styled(" by ", Style::defauhttp://localhost:8080/callback?code=AQB5YdaYO2e6hwLwmQyBSrFB1QewMXsl6UfwmFwqIejOazNZyqCiRdCiRaU6w4tqutvBuvBN8IAhYGRP3xLfJD5xBNrc_MIOs5AXkvxUb4jAjQuqsRat3h_GLNAJFSBPPUzT8fYQtAhYIJSGdvZvWSXOqamTrh4uns8-4h8G5EgvrzwBxxcZkA_JeSP5S3olyQ&state=zAyT5F9rwaioPOrtlt()),
                 Span::styled(artists, Style::default()),
                 Span::styled(
                     format!(" ({})", duration),
