@@ -90,11 +90,49 @@ pub async fn get_top_tracks(
             artists: get_artists(item.artists.clone()),
         };
 
-        if top_track.index as u8 == limit + 1 {
+        if top_track.index as u8 == limit {
             break;
         }
         result.push(top_track);
     }
 
+    Ok(result)
+}
+
+#[derive(Debug, Clone)]
+pub struct TopArtistResult {
+    pub index: usize,
+    pub artist_name: String,
+    pub genres: String,
+}
+
+pub async fn get_top_artists(
+    client: &AuthCodeSpotify,
+    time_range: TimeRange,
+    limit: u8,
+) -> Result<Vec<TopArtistResult>, ClientError> {
+    let stream = client.current_user_top_artists(Some(time_range));
+    pin_mut!(stream);
+
+    let mut result: Vec<TopArtistResult> = Vec::new();
+
+    while let Some(item) = stream.try_next().await? {
+        let top_artist = TopArtistResult {
+            index: result.len() + 1,
+            artist_name: item.name.clone(),
+            genres: item
+                .genres
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<String>>()
+                .join(", "),
+        };
+
+        if top_artist.index as u8 == limit {
+            break;
+        }
+        result.push(top_artist);
+    }
     Ok(result)
 }

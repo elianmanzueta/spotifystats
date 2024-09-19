@@ -1,7 +1,7 @@
 pub mod client;
 use crate::client::{get_env_var, get_top_tracks, Client};
 use app::App;
-use client::get_user_display_name;
+use client::{get_top_artists, get_user_display_name};
 
 pub mod app;
 use dotenvy::dotenv;
@@ -38,7 +38,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let mut app = App {
         time_range: TimeRange::ShortTerm,
-        result_limit: 11,
+        result_limit: 25,
         ..Default::default()
     };
 
@@ -55,9 +55,10 @@ async fn main() -> color_eyre::Result<()> {
     let top_tracks = get_top_tracks(&client, app.time_range, app.result_limit).await?;
     app.top_tracks = top_tracks;
 
-    println!("Hello {}!", app.username);
+    let top_artists = get_top_artists(&client, app.time_range, app.result_limit).await?;
+    app.top_artists = top_artists;
 
-    let output = app.parse_output();
+    println!("Hello {}!", app.username);
 
     // TUI
     let terminal = ratatui::init();

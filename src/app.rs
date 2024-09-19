@@ -4,18 +4,19 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{block::Title, Block, BorderType, Paragraph},
+    widgets::{block::Title, Block, BorderType, Paragraph, Wrap},
     DefaultTerminal, Frame,
 };
 
 use rspotify::model::TimeRange;
 
-use crate::client::TopTrackResult;
+use crate::client::{TopArtistResult, TopTrackResult};
 
 #[derive(Debug)]
 pub struct App {
     pub running: bool,
     pub top_tracks: Vec<TopTrackResult>,
+    pub top_artists: Vec<TopArtistResult>,
     pub username: String,
     pub result_limit: u8,
     pub time_range: TimeRange,
@@ -27,6 +28,7 @@ impl App {
         Self {
             running: false,
             top_tracks: Vec::new(),
+            top_artists: Vec::new(),
             username: String::new(),
             result_limit: 10,
             time_range: TimeRange::ShortTerm,
@@ -51,37 +53,56 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let layout = Layout::new(
             Direction::Vertical,
-            vec![Constraint::Length(10), Constraint::Length(50)],
+            vec![Constraint::Fill(1), Constraint::Fill(1)],
         )
         .split(frame.area());
 
-        let top_tracks_widget = Self::top_tracks_widget(self);
-        frame.render_widget(top_tracks_widget, layout[1]);
+        let top_tracks_widget = self.top_tracks_widget();
+        frame.render_widget(top_tracks_widget, layout[0]);
+
+        let top_artists_widget = self.top_artists_widget();
+        frame.render_widget(top_artists_widget, layout[1]);
     }
 
     fn top_tracks_widget(&mut self) -> Paragraph {
-        let username = self.username.clone();
-        let time_range = self.time_range;
-        let time_range = Self::show_time_range(time_range);
-        let output = self.parse_output();
+        let time_range = Self::show_time_range(&self.time_range);
+
+        let output = self.parse_top_tracks_output();
+
+        let style = Style::new().green();
 
         let widget = Paragraph::new(output)
             .block(
                 Block::bordered()
-                    .border_type(BorderType::Rounded)
-                    .border_style(Style::new().green())
-                    .title(Title::from(format!(
-                        "Top Tracks ({}): {}",
-                        time_range, username
-                    )))
+                    .border_type(BorderType::QuadrantInside)
+                    .border_style(style)
+                    .title(Title::from(format!("Top Tracks ({})", time_range)))
                     .title_alignment(Alignment::Center),
             )
+            .wrap(Wrap { trim: true })
             .centered();
 
         widget
     }
 
-    pub fn show_time_range(time_range: TimeRange) -> String {
+    fn top_artists_widget(&mut self) -> Paragraph {
+        let time_range = Self::show_time_range(&self.time_range);
+        let output = self.parse_top_artists_output();
+        let style = Style::new().green();
+        let widget = Paragraph::new(output)
+            .block(
+                Block::bordered()
+                    .border_type(BorderType::QuadrantInside)
+                    .border_style(style)
+                    .title(Title::from(format!("Top Artists ({})", time_range)))
+                    .title_alignment(Alignment::Center),
+            )
+            .wrap(Wrap { trim: true })
+            .centered();
+        widget
+    }
+
+    fn show_time_range(time_range: &TimeRange) -> String {
         match time_range {
             TimeRange::ShortTerm => "Short Term".to_string(),
             TimeRange::MediumTerm => "Medium Term".to_string(),
@@ -89,7 +110,7 @@ impl App {
         }
     }
 
-    pub fn parse_output(&mut self) -> Text {
+    pub fn parse_top_tracks_output(&mut self) -> Text {
         let mut lines = Text::default();
 
         for track in &self.top_tracks {
@@ -107,7 +128,7 @@ impl App {
                 ),
                 Span::styled(" - ", Style::default()),
                 Span::styled(track_name, Style::default()),
-                Span::styled(" by ", Style::defauhttp://localhost:8080/callback?code=AQB5YdaYO2e6hwLwmQyBSrFB1QewMXsl6UfwmFwqIejOazNZyqCiRdCiRaU6w4tqutvBuvBN8IAhYGRP3xLfJD5xBNrc_MIOs5AXkvxUb4jAjQuqsRat3h_GLNAJFSBPPUzT8fYQtAhYIJSGdvZvWSXOqamTrh4uns8-4h8G5EgvrzwBxxcZkA_JeSP5S3olyQ&state=zAyT5F9rwaioPOrtlt()),
+                Span::styled(" by ", Style::default()),
                 Span::styled(artists, Style::default()),
                 Span::styled(
                     format!(" ({})", duration),
@@ -120,7 +141,32 @@ impl App {
         }
         lines
     }
+    pub fn parse_top_artists_output(&mut self) -> Text {
+        let mut lines = Text::default();
 
+        for track in &self.top_artists {
+            let index = track.index;
+            let artist_name = track.artist_name.clone();
+            let artist_genres = track.genres.clone();
+
+            let result = vec![
+                Span::styled(
+                    index.to_string(),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::ITALIC),
+                ),
+                Span::styled(" - ", Style::default()),
+                Span::styled(artist_name, Style::default()),
+                Span::styled(" ", Style::default()),
+                Span::styled(format!("({})", artist_genres), Style::default()),
+            ];
+
+            let text: Vec<Line<'_>> = vec![result.into()];
+            lines.extend(text)
+        }
+        lines
+    }
     /// Reads the crossterm events and updates the state of [`App`].
     ///
     /// If your application needs to perform work in between handling events, you can use the
