@@ -1,10 +1,12 @@
+use std::time::{Duration, Instant};
+
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{block::Title, Block, BorderType, Paragraph, Wrap},
+    widgets::{block::Title, Block, BorderType, Paragraph, Scrollbar, ScrollbarState, Wrap},
     DefaultTerminal, Frame,
 };
 
@@ -20,6 +22,8 @@ pub struct App {
     pub username: String,
     pub result_limit: u8,
     pub time_range: TimeRange,
+    pub vertical_scroll_state: ScrollbarState,
+    pub vertical_scroll: usize,
 }
 
 impl App {
@@ -32,12 +36,15 @@ impl App {
             username: String::new(),
             result_limit: 10,
             time_range: TimeRange::ShortTerm,
+            vertical_scroll_state: ScrollbarState::default(),
+            vertical_scroll: 0,
         }
     }
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         self.running = true;
+
         while self.running {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_crossterm_events()?;
@@ -57,21 +64,22 @@ impl App {
         )
         .split(frame.area());
 
-        let top_tracks_widget = self.top_tracks_widget();
-        frame.render_widget(top_tracks_widget, layout[0]);
+        self.render_top_tracks(frame, layout[0]);
 
         let top_artists_widget = self.top_artists_widget();
         frame.render_widget(top_artists_widget, layout[1]);
     }
 
-    fn top_tracks_widget(&mut self) -> Paragraph {
+    fn render_top_tracks(&mut self, frame: &mut Frame, area: Rect) {
         let time_range = Self::show_time_range(&self.time_range);
+        let style = Style::new().green();
 
         let output = self.parse_top_tracks_output();
 
-        let style = Style::new().green();
+        let scrollbar = Scrollbar::default();
 
         let widget = Paragraph::new(output)
+            .scroll((0, 0))
             .block(
                 Block::bordered()
                     .border_type(BorderType::QuadrantInside)
@@ -82,7 +90,31 @@ impl App {
             .wrap(Wrap { trim: true })
             .centered();
 
-        widget
+        let mut scroll_state = self.vertical_scroll_state;
+
+        frame.render_widget(widget, area);
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            }),
+            &mut scroll_state,
+        )
+    }
+
+    fn render_scrollbar(&mut self, frame: &mut Frame, area: Rect, content: Text) {
+        let scrollbar = Scrollbar::default();
+        let mut scroll_state = self.vertical_scroll_state;
+
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            }),
+            &mut scroll_state,
+        )
     }
 
     fn top_artists_widget(&mut self) -> Paragraph {
@@ -115,9 +147,9 @@ impl App {
 
         for track in &self.top_tracks {
             let index = track.index;
-            let track_name = track.track_name.clone();
+            let track_name = &track.track_name;
             let artists = track.artists.join(", ");
-            let duration = track.duration.clone();
+            let duration = &track.duration;
 
             let result = vec![
                 Span::styled(
@@ -187,6 +219,11 @@ impl App {
             (_, KeyCode::Esc | KeyCode::Char('q'))
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
             // Add other key handlers here.
+            (_, KeyCode::Char('j') | KeyCode::Down) => {
+                self.vertical_scroll = self.vertical_scroll.saturating_add(1);
+                self.vertical_scroll_state =
+                    self.vertical_scroll_state.position(self.vertical_scroll);
+            }
             _ => {}
         }
     }

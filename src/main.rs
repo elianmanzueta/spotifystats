@@ -38,7 +38,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let mut app = App {
         time_range: TimeRange::ShortTerm,
-        result_limit: 25,
+        result_limit: 10,
         ..Default::default()
     };
 

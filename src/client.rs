@@ -90,7 +90,7 @@ pub async fn get_top_tracks(
             artists: get_artists(item.artists.clone()),
         };
 
-        if top_track.index as u8 == limit {
+        if top_track.index as u8 == limit + 1 {
             break;
         }
         result.push(top_track);
@@ -129,7 +129,7 @@ pub async fn get_top_artists(
                 .join(", "),
         };
 
-        if top_artist.index as u8 == limit {
+        if top_artist.index as u8 == limit + 1 {
             break;
         }
         result.push(top_artist);
