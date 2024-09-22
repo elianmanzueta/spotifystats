@@ -1,9 +1,12 @@
 pub mod client;
+use std::time::Duration;
+
 use crate::client::{get_env_var, get_top_tracks, Client};
-use app2::{Model, RunningState};
+use app2::{draw, update, Message, Model, RunningState};
 use client::{get_top_artists, get_user_display_name};
 
 pub mod app2;
+use crossterm::event::{self, Event, KeyCode};
 use dotenvy::dotenv;
 use rspotify::{model::TimeRange, AuthCodeSpotify, Credentials};
 
@@ -63,9 +66,35 @@ async fn main() -> color_eyre::Result<()> {
 
     while model.running_state != RunningState::Done {
         terminal.draw(|f| draw(&mut model, f))?;
+
+        let current_msg = handle_event(&model)?;
+
+        while current_msg.is_some() {
+            current_msg = update(&mut model, current_msg.unwrap());
+        }
     }
 
     Ok(())
+}
+
+fn handle_event(_: &Model) -> color_eyre::Result<Option<Message>> {
+    if event::poll(Duration::from_millis(250))? {
+        if let Event::Key(key) = event::read()? {
+            if key.kind == event::KeyEventKind::Press {
+                return Ok(handle_key(key));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn handle_key(key: event::KeyEvent) -> Option<Message> {
+    match key.code {
+        KeyCode::Char('j') => Some(Message::ScrollDown),
+        KeyCode::Char('k') => Some(Message::ScrollUp),
+        KeyCode::Char('q') => Some(Message::Quit),
+        _ => None,
+    }
 }
 
 mod tui {

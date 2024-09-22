@@ -140,7 +140,7 @@ pub enum Message {
     Quit,
 }
 
-fn update(model: &mut Model, msg: Message) -> Option<Message> {
+pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     match msg {
         Message::ScrollDown => {
             model.scroll_position = model.scroll_position.saturating_add(1);
@@ -173,6 +173,7 @@ pub fn render_top_tracks(model: &mut Model, frame: &mut Frame, area: Rect) {
 
     frame.render_widget(widget, area);
 }
+
 pub fn draw(model: &mut Model, frame: &mut Frame) {
     let layout = Layout::new(
         Direction::Vertical,
