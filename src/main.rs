@@ -1,9 +1,9 @@
 pub mod client;
 use crate::client::{get_env_var, get_top_tracks, Client};
-use app::App;
+use app2::{Model, RunningState};
 use client::{get_top_artists, get_user_display_name};
 
-pub mod app;
+pub mod app2;
 use dotenvy::dotenv;
 use rspotify::{model::TimeRange, AuthCodeSpotify, Credentials};
 
@@ -36,9 +36,9 @@ async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
     color_eyre::install()?;
 
-    let mut app = App {
+    let mut model = Model {
         time_range: TimeRange::ShortTerm,
-        result_limit: 10,
+        limit: 10,
         ..Default::default()
     };
 
@@ -49,20 +49,57 @@ async fn main() -> color_eyre::Result<()> {
         return Ok(());
     };
 
-    let username = get_user_display_name(&client).await;
-    app.username = username;
+    let top_tracks = get_top_tracks(&client, model.time_range, model.limit as u8).await?;
+    model.top_tracks = top_tracks;
 
-    let top_tracks = get_top_tracks(&client, app.time_range, app.result_limit).await?;
-    app.top_tracks = top_tracks;
+    let top_artists = get_top_artists(&client, model.time_range, model.limit as u8).await?;
+    model.top_artists = top_artists;
 
-    let top_artists = get_top_artists(&client, app.time_range, app.result_limit).await?;
-    app.top_artists = top_artists;
+    println!("Hello {}!", model.username);
 
-    println!("Hello {}!", app.username);
+    tui::install_panic_hook();
 
-    // TUI
-    let terminal = ratatui::init();
-    let result = app.run(terminal);
-    ratatui::restore();
-    result
+    let mut terminal = tui::init_terminal()?;
+
+    while model.running_state != RunningState::Done {
+        terminal.draw(|f| draw(&mut model, f))?;
+    }
+
+    Ok(())
+}
+
+mod tui {
+    use ratatui::{
+        backend::{Backend, CrosstermBackend},
+        crossterm::{
+            terminal::{
+                disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+            },
+            ExecutableCommand,
+        },
+        Terminal,
+    };
+    use std::{io::stdout, panic};
+
+    pub fn init_terminal() -> color_eyre::Result<Terminal<impl Backend>> {
+        enable_raw_mode()?;
+        stdout().execute(EnterAlternateScreen)?;
+        let terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+        Ok(terminal)
+    }
+
+    pub fn restore_terminal() -> color_eyre::Result<()> {
+        stdout().execute(LeaveAlternateScreen)?;
+        disable_raw_mode()?;
+        Ok(())
+    }
+
+    pub fn install_panic_hook() {
+        let original_hook = panic::take_hook();
+        panic::set_hook(Box::new(move |panic_info| {
+            stdout().execute(LeaveAlternateScreen).unwrap();
+            disable_raw_mode().unwrap();
+            original_hook(panic_info);
+        }));
+    }
 }
