@@ -2,7 +2,7 @@ pub mod client;
 use std::time::Duration;
 
 use crate::client::{get_env_var, get_top_tracks, Client};
-use app2::{draw, update, Message, Model, RunningState};
+use app2::{update, view, Message, Model, RunningState};
 use client::{get_top_artists, get_user_display_name};
 
 pub mod app2;
@@ -10,7 +10,7 @@ use crossterm::event::{self, Event, KeyCode};
 use dotenvy::dotenv;
 use rspotify::{model::TimeRange, AuthCodeSpotify, Credentials};
 
-async fn authenticate() -> Option<AuthCodeSpotify> {
+async fn authenticate() -> AuthCodeSpotify {
     dotenv().ok();
     let id = get_env_var("RSPOTIFY_CLIENT_ID");
     let secret = get_env_var("RSPOTIFY_CLIENT_SECRET");
@@ -24,14 +24,12 @@ async fn authenticate() -> Option<AuthCodeSpotify> {
         redirect_uri,
     };
 
-    let client = match cred.auth().await {
+    match cred.auth().await {
         Some(client) => client,
         None => {
             panic!("Authentication failed.")
         }
-    };
-
-    Some(client)
+    }
 }
 
 #[tokio::main]
@@ -42,38 +40,43 @@ async fn main() -> color_eyre::Result<()> {
     let mut model = Model {
         time_range: TimeRange::ShortTerm,
         limit: 10,
+        running_state: RunningState::Running,
         ..Default::default()
     };
 
-    let client = if let Some(client) = authenticate().await {
-        client
-    } else {
-        println!("Authentication failed...");
-        return Ok(());
-    };
+    let client = authenticate().await;
+
+    let display_name = get_user_display_name(&client).await;
+    model.set_user_display_name(display_name);
 
     let top_tracks = get_top_tracks(&client, model.time_range, model.limit as u8).await?;
-    model.top_tracks = top_tracks;
+    model.set_top_tracks(top_tracks);
 
     let top_artists = get_top_artists(&client, model.time_range, model.limit as u8).await?;
-    model.top_artists = top_artists;
+    model.set_top_artists(top_artists);
 
-    println!("Hello {}!", model.username);
+    println!("Hello {}!", model.display_name);
 
     tui::install_panic_hook();
 
     let mut terminal = tui::init_terminal()?;
 
     while model.running_state != RunningState::Done {
-        terminal.draw(|f| draw(&mut model, f))?;
+        terminal.draw(|f| view(&mut model, f))?;
 
-        let current_msg = handle_event(&model)?;
+        let mut current_msg = handle_event(&model)?;
 
         while current_msg.is_some() {
+            if current_msg == Some(Message::ChangeTimeRange) {
+                let top_tracks =
+                    get_top_tracks(&client, model.time_range, model.limit as u8).await?;
+                model.set_top_tracks(top_tracks);
+            }
             current_msg = update(&mut model, current_msg.unwrap());
         }
     }
 
+    tui::restore_terminal()?;
     Ok(())
 }
 
@@ -92,7 +95,9 @@ fn handle_key(key: event::KeyEvent) -> Option<Message> {
     match key.code {
         KeyCode::Char('j') => Some(Message::ScrollDown),
         KeyCode::Char('k') => Some(Message::ScrollUp),
+        KeyCode::Char('m') => Some(Message::ChangeTimeRange),
         KeyCode::Char('q') => Some(Message::Quit),
+
         _ => None,
     }
 }
