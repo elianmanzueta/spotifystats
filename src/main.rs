@@ -3,12 +3,12 @@ use std::time::Duration;
 
 use crate::client::{get_env_var, get_top_tracks, Client};
 use app2::{update, view, Message, Model, RunningState};
-use client::{get_top_artists, get_user_display_name};
+use client::{get_top_artists, get_user_display_name, TopArtist, TopArtists, TopTrack, TopTracks};
 
 pub mod app2;
 use crossterm::event::{self, Event, KeyCode};
 use dotenvy::dotenv;
-use rspotify::{model::TimeRange, AuthCodeSpotify, Credentials};
+use rspotify::{model::TimeRange, AuthCodeSpotify, ClientError, Credentials};
 
 async fn authenticate() -> AuthCodeSpotify {
     dotenv().ok();
@@ -32,6 +32,20 @@ async fn authenticate() -> AuthCodeSpotify {
     }
 }
 
+struct UserResults {
+    tracks: Vec<TopTracks>,
+    artists: Vec<TopArtists>,
+}
+
+async fn get_results(client: &AuthCodeSpotify) -> Result<UserResults, ClientError> {
+    let result: UserResults;
+    let short_term = get_top_tracks(&client, TimeRange::ShortTerm, 50).await?;
+    let medium_term = get_top_tracks(&client, TimeRange::MediumTerm, 50).await?;
+    let long_term = get_top_tracks(&client, TimeRange::LongTerm, 50).await?;
+
+    result.tracks.append(short_term)
+}
+
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
@@ -47,14 +61,10 @@ async fn main() -> color_eyre::Result<()> {
     let client = authenticate().await;
 
     let display_name = get_user_display_name(&client).await;
-    model.set_user_display_name(display_name);
 
     let top_tracks = get_top_tracks(&client, model.time_range, model.limit as u8).await?;
-    model.set_top_tracks(top_tracks);
 
     let top_artists = get_top_artists(&client, model.time_range, model.limit as u8).await?;
-    model.set_top_artists(top_artists);
-
     println!("Hello {}!", model.display_name);
 
     tui::install_panic_hook();
@@ -67,11 +77,6 @@ async fn main() -> color_eyre::Result<()> {
         let mut current_msg = handle_event(&model)?;
 
         while current_msg.is_some() {
-            if current_msg == Some(Message::ChangeTimeRange) {
-                let top_tracks =
-                    get_top_tracks(&client, model.time_range, model.limit as u8).await?;
-                model.set_top_tracks(top_tracks);
-            }
             current_msg = update(&mut model, current_msg.unwrap());
         }
     }

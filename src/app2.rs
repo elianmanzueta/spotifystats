@@ -8,7 +8,7 @@ use ratatui::{
 
 use rspotify::{model::TimeRange, AuthCodeSpotify};
 
-use crate::client::{Client, TopArtistResult, TopTrackResult};
+use crate::client::{Client, TopArtist, TopTracks};
 
 pub struct Model {
     pub running_state: RunningState,
@@ -16,8 +16,8 @@ pub struct Model {
     pub display_name: String,
     pub limit: usize,
     pub client: AuthCodeSpotify,
-    pub top_tracks: Vec<TopTrackResult>,
-    pub top_artists: Vec<TopArtistResult>,
+    pub top_tracks: Vec<TopTracks>,
+    pub top_artists: Vec<TopArtist>,
     pub scrollbar_state: ScrollbarState,
     pub scroll_position: usize,
 }
@@ -52,26 +52,11 @@ impl Model {
         widget
     }
 
-    pub fn set_user_display_name(&mut self, username: String) {
-        self.display_name = username
-    }
-
-    pub fn set_client(&mut self, client: AuthCodeSpotify) {
-        self.client = client
-    }
-
-    pub fn set_top_tracks(&mut self, tracks: Vec<TopTrackResult>) {
-        self.top_tracks = tracks;
-    }
-
-    pub fn set_top_artists(&mut self, artists: Vec<TopArtistResult>) {
-        self.top_artists = artists;
-    }
-
     pub fn parse_top_tracks_output(&self) -> Text {
+        // TODO: Refactor function to handle all top track outputs in TopTracks struct.
         let mut lines = Text::default();
 
-        for track in &self.top_tracks {
+        for result in &self.top_artists {
             let index = track.index;
             let track_name = &track.track_name;
             let artists = track.artists.join(", ");

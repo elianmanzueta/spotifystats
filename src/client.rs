@@ -80,26 +80,32 @@ pub fn get_artists(artists: Vec<SimplifiedArtist>) -> Vec<String> {
 }
 
 #[derive(Debug, Clone)]
-pub struct TopTrackResult {
+pub struct TopTrack {
     pub index: usize,
     pub track_name: String,
     pub duration: String,
     pub artists: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TopTracks {
+    pub time_range: TimeRange,
+    pub tracks: Vec<TopTrack>,
+}
+
 pub async fn get_top_tracks(
     client: &AuthCodeSpotify,
     time_range: TimeRange,
     limit: u8,
-) -> Result<Vec<TopTrackResult>, ClientError> {
+) -> Result<TopTracks, ClientError> {
     let stream = client.current_user_top_tracks(Some(time_range));
     pin_mut!(stream);
 
-    let mut result: Vec<TopTrackResult> = Vec::new();
+    let mut tracks: Vec<TopTrack> = Vec::new();
 
     while let Some(item) = stream.try_next().await? {
-        let top_track = TopTrackResult {
-            index: result.len() + 1,
+        let top_track = TopTrack {
+            index: tracks.len() + 1,
             track_name: item.name.clone(),
             duration: format_duration(item.duration),
             artists: get_artists(item.artists.clone()),
@@ -108,31 +114,38 @@ pub async fn get_top_tracks(
         if top_track.index as u8 == limit + 1 {
             break;
         }
-        result.push(top_track);
+        tracks.push(top_track);
     }
+
+    let result = TopTracks { time_range, tracks };
 
     Ok(result)
 }
 
 #[derive(Debug, Clone)]
-pub struct TopArtistResult {
+pub struct TopArtist {
     pub index: usize,
     pub artist_name: String,
     pub genres: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct TopArtists {
+    pub time_range: TimeRange,
+    pub artists: Vec<TopArtist>,
+}
 pub async fn get_top_artists(
     client: &AuthCodeSpotify,
     time_range: TimeRange,
     limit: u8,
-) -> Result<Vec<TopArtistResult>, ClientError> {
+) -> Result<Vec<TopArtist>, ClientError> {
     let stream = client.current_user_top_artists(Some(time_range));
     pin_mut!(stream);
 
-    let mut result: Vec<TopArtistResult> = Vec::new();
+    let mut result: Vec<TopArtist> = Vec::new();
 
     while let Some(item) = stream.try_next().await? {
-        let top_artist = TopArtistResult {
+        let top_artist = TopArtist {
             index: result.len() + 1,
             artist_name: item.name.clone(),
             genres: item

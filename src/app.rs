@@ -1,10 +1,12 @@
+use std::time::{Duration, Instant};
+
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{block::Title, Block, BorderType, Paragraph, ScrollbarState, Wrap},
+    widgets::{block::Title, Block, BorderType, Paragraph, Scrollbar, ScrollbarState, Wrap},
     DefaultTerminal, Frame,
 };
 
@@ -26,8 +28,8 @@ pub struct App {
 
 impl App {
     /// Construct a new instance of [`App`].
-    pub fn new() -> App {
-        App {
+    pub fn new() -> Self {
+        Self {
             running: false,
             top_tracks: Vec::new(),
             top_artists: Vec::new(),
@@ -74,6 +76,8 @@ impl App {
 
         let output = self.parse_top_tracks_output();
 
+        let scrollbar = Scrollbar::default();
+
         let widget = Paragraph::new(output)
             .scroll((0, 0))
             .block(
@@ -86,7 +90,31 @@ impl App {
             .wrap(Wrap { trim: true })
             .centered();
 
+        let mut scroll_state = self.vertical_scroll_state;
+
         frame.render_widget(widget, area);
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            }),
+            &mut scroll_state,
+        )
+    }
+
+    fn render_scrollbar(&mut self, frame: &mut Frame, area: Rect, content: Text) {
+        let scrollbar = Scrollbar::default();
+        let mut scroll_state = self.vertical_scroll_state;
+
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            }),
+            &mut scroll_state,
+        )
     }
 
     fn top_artists_widget(&mut self) -> Paragraph {
