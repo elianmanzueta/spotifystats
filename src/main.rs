@@ -25,7 +25,9 @@ async fn authenticate() -> AuthCodeSpotify {
     };
 
     match cred.auth().await {
-        Some(client) => client,
+        Some(client) => {
+            client
+        },
         None => {
             panic!("Authentication failed.")
         }
@@ -56,7 +58,6 @@ async fn main() -> color_eyre::Result<()> {
     let top_tracks = get_top_tracks(&client, model.time_range, model.limit as u8).await?;
 
     let top_artists = get_top_artists(&client, model.time_range, model.limit as u8).await?;
-    println!("Hello {}!", model.display_name);
 
     tui::install_panic_hook();
 

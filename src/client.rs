@@ -50,7 +50,7 @@ impl Client {
         } else {
             println!("Couldn't perform OAuth authentication.");
         }
-
+          
         Some(spotify)
     }
 }
