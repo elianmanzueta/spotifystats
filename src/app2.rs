@@ -8,7 +8,7 @@ use ratatui::{
 
 use rspotify::{model::TimeRange, AuthCodeSpotify};
 
-use crate::client::{TopArtist, TopTracks};
+use crate::client::{TopArtist, TopTrack};
 
 pub struct Model {
     pub running_state: RunningState,
@@ -16,7 +16,7 @@ pub struct Model {
     pub display_name: String,
     pub limit: usize,
     pub client: AuthCodeSpotify,
-    pub top_tracks: Vec<TopTracks>,
+    pub top_tracks: Vec<TopTrack>,
     pub top_artists: Vec<TopArtist>,
     pub scrollbar_state: ScrollbarState,
     pub scroll_position: usize,
@@ -57,11 +57,11 @@ impl Model {
         // One function to parse another to draw? 
         let mut lines = Text::default();
 
-        for result in &self.top_artists {
-            let index = track.index;
-            let track_name = &track.track_name;
-            let artists = track.artists.join(", ");
-            let duration = &track.duration;
+        for result in &self.top_tracks {
+            let index = result.index;
+            let track_name = &result.track_name;
+            let artists = result.artists.join(", ");
+            let duration = &result.duration;
 
             let result = vec![
                 Span::styled(

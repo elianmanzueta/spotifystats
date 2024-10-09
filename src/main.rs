@@ -37,15 +37,6 @@ struct UserResults {
     artists: Vec<TopArtists>,
 }
 
-async fn get_results(client: &AuthCodeSpotify) -> Result<UserResults, ClientError> {
-    let result: UserResults;
-    let short_term = get_top_tracks(&client, TimeRange::ShortTerm, 50).await?;
-    let medium_term = get_top_tracks(&client, TimeRange::MediumTerm, 50).await?;
-    let long_term = get_top_tracks(&client, TimeRange::LongTerm, 50).await?;
-
-    result.tracks.append(short_term)
-}
-
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
