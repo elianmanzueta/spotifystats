@@ -8,7 +8,7 @@ use ratatui::{
 
 use rspotify::{model::TimeRange, AuthCodeSpotify};
 
-use crate::client::{TopArtist, TopTrack};
+use crate::client::{TopArtist, TopTrack, TopTracks};
 
 pub struct Model {
     pub running_state: RunningState,
@@ -16,7 +16,7 @@ pub struct Model {
     pub display_name: String,
     pub limit: usize,
     pub client: AuthCodeSpotify,
-    pub top_tracks: Vec<TopTrack>,
+    pub top_tracks: TopTracks,
     pub top_artists: Vec<TopArtist>,
     pub scrollbar_state: ScrollbarState,
     pub scroll_position: usize,
@@ -30,38 +30,27 @@ impl Model {
             limit: 10,
             scrollbar_state: ScrollbarState::default(),
             scroll_position: 0,
-            top_tracks: Vec::new(),
+            top_tracks: TopTracks {
+                time_range: TimeRange::ShortTerm,
+                tracks: Vec::new(),
+            },
             top_artists: Vec::new(),
             time_range: TimeRange::ShortTerm,
             client: AuthCodeSpotify::default(),
         }
     }
 
-    pub fn top_artists_widget(&mut self) -> Paragraph {
-        let output = self.parse_top_artists_output();
-        let style = Style::new().green();
-        let widget = Paragraph::new(output)
-            .block(
-                Block::bordered()
-                    .border_type(BorderType::QuadrantInside)
-                    .border_style(style)
-                    .title_alignment(Alignment::Center),
-            )
-            .wrap(Wrap { trim: true })
-            .centered();
-        widget
-    }
-
     pub fn parse_top_tracks_output(&self) -> Text {
         // TODO: Refactor function to handle all top track outputs in TopTracks struct.
-        // One function to parse another to draw? 
+        // One function to parse another to draw?
         let mut lines = Text::default();
 
-        for result in &self.top_tracks {
+        for result in self.top_tracks.iter() {
             let index = result.index;
-            let track_name = &result.track_name;
+            let track_name = result.track_name;
             let artists = result.artists.join(", ");
-            let duration = &result.duration;
+            let duration = result.duration;
+
 
             let result = vec![
                 Span::styled(
@@ -85,6 +74,7 @@ impl Model {
         }
         lines
     }
+
     pub fn parse_top_artists_output(&self) -> Text {
         let mut lines = Text::default();
 

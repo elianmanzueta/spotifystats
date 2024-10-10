@@ -50,7 +50,7 @@ impl Client {
         } else {
             println!("Couldn't perform OAuth authentication.");
         }
-          
+
         Some(spotify)
     }
 }
@@ -91,6 +91,35 @@ pub struct TopTrack {
 pub struct TopTracks {
     pub time_range: TimeRange,
     pub tracks: Vec<TopTrack>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TopTracksIterator {
+    top_tracks: TopTracks,
+    current: usize,
+}
+
+impl Iterator for TopTracksIterator {
+    type Item = TopTrack;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current < self.top_tracks.tracks.len() {
+            let track = self.top_tracks.tracks[self.current].clone();
+            self.current += 1;
+            Some(track)
+        } else {
+            None
+        }
+    }
+}
+
+impl TopTracks {
+    pub fn iter(&self) -> TopTracksIterator {
+        TopTracksIterator {
+            top_tracks: self.clone(),
+            current: 0,
+        }
+    }
 }
 
 pub async fn get_top_tracks(
