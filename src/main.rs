@@ -59,6 +59,7 @@ async fn main() -> color_eyre::Result<()> {
     model.top_tracks = top_tracks;
 
     let top_artists = get_top_artists(&client, model.time_range, model.limit as u8).await?;
+    model.top_artists = top_artists;
 
     tui::install_panic_hook();
 

@@ -163,6 +163,27 @@ pub struct TopArtists {
     pub time_range: TimeRange,
     pub artists: Vec<TopArtist>,
 }
+
+#[derive(Debug, Clone)]
+pub struct TopArtistsIterator {
+    pub top_artists: TopArtists,
+    pub current: usize,
+}
+
+impl Iterator for TopArtistsIterator {
+    type Item = TopArtist;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current < self.top_artists.artists.len() {
+            let track = self.top_artists.artists[self.current].clone();
+            self.current += 1;
+            Some(track)
+        } else {
+            None
+        }
+    }
+}
+
 pub async fn get_top_artists(
     client: &AuthCodeSpotify,
     time_range: TimeRange,

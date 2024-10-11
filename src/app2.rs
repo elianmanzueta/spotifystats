@@ -41,8 +41,6 @@ impl Model {
     }
 
     pub fn parse_top_tracks_output(&self) -> Text {
-        // TODO: Refactor function to handle all top track outputs in TopTracks struct.
-        // One function to parse another to draw?
         let mut lines = Text::default();
 
         for result in self.top_tracks.iter() {
