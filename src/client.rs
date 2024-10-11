@@ -184,19 +184,28 @@ impl Iterator for TopArtistsIterator {
     }
 }
 
+impl TopArtists {
+    pub fn iter(&self) -> TopArtistsIterator {
+        TopArtistsIterator {
+            top_artists: self.clone(),
+            current: 0,
+        }
+    }
+}
+
 pub async fn get_top_artists(
     client: &AuthCodeSpotify,
     time_range: TimeRange,
     limit: u8,
-) -> Result<Vec<TopArtist>, ClientError> {
+) -> Result<TopArtists, ClientError> {
     let stream = client.current_user_top_artists(Some(time_range));
     pin_mut!(stream);
 
-    let mut result: Vec<TopArtist> = Vec::new();
+    let mut artists: Vec<TopArtist> = Vec::new();
 
     while let Some(item) = stream.try_next().await? {
         let top_artist = TopArtist {
-            index: result.len() + 1,
+            index: artists.len() + 1,
             artist_name: item.name.clone(),
             genres: item
                 .genres
@@ -210,7 +219,10 @@ pub async fn get_top_artists(
         if top_artist.index as u8 == limit + 1 {
             break;
         }
-        result.push(top_artist);
+        artists.push(top_artist);
     }
+
+    let result = TopArtists { time_range, artists };
+
     Ok(result)
 }

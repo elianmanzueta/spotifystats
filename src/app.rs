@@ -1,155 +1,56 @@
-use std::time::{Duration, Instant};
-
-use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{block::Title, Block, BorderType, Paragraph, Scrollbar, ScrollbarState, Wrap},
-    DefaultTerminal, Frame,
+    widgets::{block::Title, Block, BorderType, Paragraph, ScrollbarState, Wrap},
+    Frame,
 };
 
-use rspotify::model::TimeRange;
+use rspotify::{model::TimeRange, AuthCodeSpotify};
 
-use crate::client::{TopArtistResult, TopTrackResult};
+use crate::client::{TopArtist, TopArtists, TopTracks};
 
-#[derive(Debug)]
-pub struct App {
-    pub running: bool,
-    pub top_tracks: Vec<TopTrackResult>,
-    pub top_artists: Vec<TopArtistResult>,
-    pub username: String,
-    pub result_limit: u8,
+pub struct Model {
+    pub running_state: RunningState,
     pub time_range: TimeRange,
-    pub vertical_scroll_state: ScrollbarState,
-    pub vertical_scroll: usize,
+    pub display_name: String,
+    pub limit: usize,
+    pub client: AuthCodeSpotify,
+    pub top_tracks: TopTracks,
+    pub top_artists: TopArtists,
+    pub scrollbar_state: ScrollbarState,
+    pub scroll_position: usize,
 }
 
-impl App {
-    /// Construct a new instance of [`App`].
-    pub fn new() -> Self {
-        Self {
-            running: false,
-            top_tracks: Vec::new(),
-            top_artists: Vec::new(),
-            username: String::new(),
-            result_limit: 10,
+impl Model {
+    pub fn new() -> Model {
+        Model {
+            running_state: RunningState::Running,
+            display_name: "None".to_string(),
+            limit: 10,
+            scrollbar_state: ScrollbarState::default(),
+            scroll_position: 0,
+            top_tracks: TopTracks {
+                time_range: TimeRange::ShortTerm,
+                tracks: Vec::new(),
+            },
+            top_artists: TopArtists {
+                time_range: TimeRange::ShortTerm,
+                artists: Vec::new(),
+            },
             time_range: TimeRange::ShortTerm,
-            vertical_scroll_state: ScrollbarState::default(),
-            vertical_scroll: 0,
+            client: AuthCodeSpotify::default(),
         }
     }
 
-    /// Run the application's main loop.
-    pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        self.running = true;
-
-        while self.running {
-            terminal.draw(|frame| self.draw(frame))?;
-            self.handle_crossterm_events()?;
-        }
-        Ok(())
-    }
-
-    /// Renders the user interface.
-    ///
-    /// This is where you add new widgets. See the following resources for more information:
-    /// - <https://docs.rs/ratatui/latest/ratatui/widgets/index.html>
-    /// - <https://github.com/ratatui/ratatui/tree/master/examples>
-    fn draw(&mut self, frame: &mut Frame) {
-        let layout = Layout::new(
-            Direction::Vertical,
-            vec![Constraint::Fill(1), Constraint::Fill(1)],
-        )
-        .split(frame.area());
-
-        self.render_top_tracks(frame, layout[0]);
-
-        let top_artists_widget = self.top_artists_widget();
-        frame.render_widget(top_artists_widget, layout[1]);
-    }
-
-    fn render_top_tracks(&mut self, frame: &mut Frame, area: Rect) {
-        let time_range = Self::show_time_range(&self.time_range);
-        let style = Style::new().green();
-
-        let output = self.parse_top_tracks_output();
-
-        let scrollbar = Scrollbar::default();
-
-        let widget = Paragraph::new(output)
-            .scroll((0, 0))
-            .block(
-                Block::bordered()
-                    .border_type(BorderType::QuadrantInside)
-                    .border_style(style)
-                    .title(Title::from(format!("Top Tracks ({})", time_range)))
-                    .title_alignment(Alignment::Center),
-            )
-            .wrap(Wrap { trim: true })
-            .centered();
-
-        let mut scroll_state = self.vertical_scroll_state;
-
-        frame.render_widget(widget, area);
-        frame.render_stateful_widget(
-            scrollbar,
-            area.inner(Margin {
-                vertical: 1,
-                horizontal: 1,
-            }),
-            &mut scroll_state,
-        )
-    }
-
-    fn render_scrollbar(&mut self, frame: &mut Frame, area: Rect, content: Text) {
-        let scrollbar = Scrollbar::default();
-        let mut scroll_state = self.vertical_scroll_state;
-
-        frame.render_stateful_widget(
-            scrollbar,
-            area.inner(Margin {
-                vertical: 1,
-                horizontal: 1,
-            }),
-            &mut scroll_state,
-        )
-    }
-
-    fn top_artists_widget(&mut self) -> Paragraph {
-        let time_range = Self::show_time_range(&self.time_range);
-        let output = self.parse_top_artists_output();
-        let style = Style::new().green();
-        let widget = Paragraph::new(output)
-            .block(
-                Block::bordered()
-                    .border_type(BorderType::QuadrantInside)
-                    .border_style(style)
-                    .title(Title::from(format!("Top Artists ({})", time_range)))
-                    .title_alignment(Alignment::Center),
-            )
-            .wrap(Wrap { trim: true })
-            .centered();
-        widget
-    }
-
-    fn show_time_range(time_range: &TimeRange) -> String {
-        match time_range {
-            TimeRange::ShortTerm => "Short Term".to_string(),
-            TimeRange::MediumTerm => "Medium Term".to_string(),
-            TimeRange::LongTerm => "Long Term".to_string(),
-        }
-    }
-
-    pub fn parse_top_tracks_output(&mut self) -> Text {
+    pub fn parse_top_tracks_output(&self) -> Text {
         let mut lines = Text::default();
 
-        for track in &self.top_tracks {
-            let index = track.index;
-            let track_name = &track.track_name;
-            let artists = track.artists.join(", ");
-            let duration = &track.duration;
+        for result in self.top_tracks.iter() {
+            let index = result.index;
+            let track_name = result.track_name;
+            let artists = result.artists.join(", ");
+            let duration = result.duration;
 
             let result = vec![
                 Span::styled(
@@ -173,10 +74,11 @@ impl App {
         }
         lines
     }
-    pub fn parse_top_artists_output(&mut self) -> Text {
+
+    pub fn parse_top_artists_output(&self) -> Text {
         let mut lines = Text::default();
 
-        for track in &self.top_artists {
+        for track in self.top_artists.iter() {
             let index = track.index;
             let artist_name = track.artist_name.clone();
             let artist_genres = track.genres.clone();
@@ -199,43 +101,106 @@ impl App {
         }
         lines
     }
-    /// Reads the crossterm events and updates the state of [`App`].
-    ///
-    /// If your application needs to perform work in between handling events, you can use the
-    /// [`event::poll`] function to check if there are any events available with a timeout.
-    fn handle_crossterm_events(&mut self) -> Result<()> {
-        match event::read()? {
-            // it's important to check KeyEventKind::Press to avoid handling key release events
-            Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key),
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
-            _ => {}
-        }
-        Ok(())
-    }
-    /// Handles the key events and updates the state of [`App`].
-    fn on_key_event(&mut self, key: KeyEvent) {
-        match (key.modifiers, key.code) {
-            (_, KeyCode::Esc | KeyCode::Char('q'))
-            | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-            // Add other key handlers here.
-            (_, KeyCode::Char('j') | KeyCode::Down) => {
-                self.vertical_scroll = self.vertical_scroll.saturating_add(1);
-                self.vertical_scroll_state =
-                    self.vertical_scroll_state.position(self.vertical_scroll);
-            }
-            _ => {}
-        }
-    }
 
-    /// Set running to false to quit the application.
-    fn quit(&mut self) {
-        self.running = false;
+    fn show_time_range(&self) -> Title<'_> {
+        match self.time_range {
+            TimeRange::ShortTerm => Title::from("Short Term"),
+            TimeRange::MediumTerm => Title::from("Medium Term"),
+            TimeRange::LongTerm => Title::from("Long Term"),
+        }
     }
 }
 
-impl Default for App {
+impl Default for Model {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum RunningState {
+    #[default]
+    Running,
+    Done,
+}
+
+#[derive(Eq, PartialEq)]
+pub enum Message {
+    ScrollUp,
+    ScrollDown,
+    ChangeTimeRange,
+    Quit,
+}
+
+pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
+    match msg {
+        Message::ScrollDown => {
+            model.scroll_position = model.scroll_position.saturating_add(1);
+            model.scrollbar_state = model.scrollbar_state.position(model.scroll_position);
+        }
+        Message::ScrollUp => {
+            model.scroll_position = model.scroll_position.saturating_sub(1);
+            model.scrollbar_state = model.scrollbar_state.position(model.scroll_position)
+        }
+        Message::Quit => model.running_state = RunningState::Done,
+        Message::ChangeTimeRange => match model.time_range {
+            TimeRange::LongTerm => model.time_range = TimeRange::ShortTerm,
+            TimeRange::MediumTerm => model.time_range = TimeRange::LongTerm,
+            TimeRange::ShortTerm => model.time_range = TimeRange::MediumTerm,
+        },
+    };
+    None
+}
+
+pub fn render_top_tracks_widget(model: &mut Model, frame: &mut Frame, area: Rect) {
+    let style = Style::new().green();
+
+    let title = model.show_time_range();
+    let output = model.parse_top_tracks_output();
+
+    let widget = Paragraph::new(output)
+        .scroll((0, 0))
+        .block(
+            Block::bordered()
+                .border_type(BorderType::QuadrantInside)
+                .title(title)
+                .border_style(style)
+                .title_alignment(Alignment::Center),
+        )
+        .wrap(Wrap { trim: true })
+        .centered();
+
+    frame.render_widget(widget, area);
+}
+
+pub fn render_top_artists_widget(model: &mut Model, frame: &mut Frame, area: Rect) {
+    let style = Style::new().green();
+
+    let title = model.show_time_range();
+    let output = model.parse_top_artists_output();
+
+    let widget = Paragraph::new(output)
+        .scroll((0, 0))
+        .block(
+            Block::bordered()
+                .border_type(BorderType::QuadrantInside)
+                .title(title)
+                .border_style(style)
+                .title_alignment(Alignment::Center),
+        )
+        .wrap(Wrap { trim: true })
+        .centered();
+
+    frame.render_widget(widget, area);
+}
+
+pub fn view(model: &mut Model, frame: &mut Frame) {
+    let layout = Layout::new(
+        Direction::Vertical,
+        vec![Constraint::Fill(1), Constraint::Fill(1)],
+    )
+    .split(frame.area());
+
+    render_top_tracks_widget(model, frame, layout[0]);
+    render_top_artists_widget(model, frame, layout[1])
 }

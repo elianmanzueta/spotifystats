@@ -2,13 +2,13 @@ pub mod client;
 use std::time::Duration;
 
 use crate::client::{get_env_var, get_top_tracks, Client};
-use app2::{update, view, Message, Model, RunningState};
-use client::{get_top_artists, get_user_display_name, TopArtist, TopArtists, TopTrack, TopTracks};
+use app::{update, view, Message, Model, RunningState};
+use client::{get_top_artists, get_user_display_name};
 
-pub mod app2;
+pub mod app;
 use crossterm::event::{self, Event, KeyCode};
 use dotenvy::dotenv;
-use rspotify::{model::TimeRange, AuthCodeSpotify, ClientError, Credentials};
+use rspotify::{model::TimeRange, AuthCodeSpotify, Credentials};
 
 async fn authenticate() -> AuthCodeSpotify {
     dotenv().ok();
@@ -25,18 +25,11 @@ async fn authenticate() -> AuthCodeSpotify {
     };
 
     match cred.auth().await {
-        Some(client) => {
-            client
-        },
+        Some(client) => client,
         None => {
             panic!("Authentication failed.")
         }
     }
-}
-
-struct UserResults {
-    tracks: Vec<TopTracks>,
-    artists: Vec<TopArtists>,
 }
 
 #[tokio::main]
@@ -54,6 +47,7 @@ async fn main() -> color_eyre::Result<()> {
     let client = authenticate().await;
 
     let display_name = get_user_display_name(&client).await;
+    model.display_name = display_name;
 
     let top_tracks = get_top_tracks(&client, model.time_range, model.limit as u8).await?;
     model.top_tracks = top_tracks;
