@@ -8,7 +8,7 @@ use ratatui::{
 
 use rspotify::{model::TimeRange, AuthCodeSpotify};
 
-use crate::client::{TopArtist, TopArtists, TopTracks};
+use crate::client::{TopArtists, TopTracks};
 
 pub struct Model {
     pub running_state: RunningState,

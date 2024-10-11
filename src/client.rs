@@ -152,6 +152,11 @@ pub async fn get_top_tracks(
 }
 
 #[derive(Debug, Clone)]
+pub struct TopArtistResults {
+    pub top_artist_results: Vec<TopArtists>,
+}
+
+#[derive(Debug, Clone)]
 pub struct TopArtist {
     pub index: usize,
     pub artist_name: String,
@@ -222,7 +227,29 @@ pub async fn get_top_artists(
         artists.push(top_artist);
     }
 
-    let result = TopArtists { time_range, artists };
+    let result = TopArtists {
+        time_range,
+        artists,
+    };
 
     Ok(result)
+}
+
+pub async fn get_all_top_artists(
+    client: &AuthCodeSpotify,
+    limit: u8,
+) -> Result<TopArtistResults, ClientError> {
+    let mut top_artists: Vec<TopArtists> = Vec::new();
+
+    let short_term = get_top_artists(client, TimeRange::ShortTerm, limit).await?;
+    let medium_term = get_top_artists(client, TimeRange::MediumTerm, limit).await?;
+    let long_term = get_top_artists(client, TimeRange::LongTerm, limit).await?;
+
+    top_artists.push(short_term);
+    top_artists.push(medium_term);
+    top_artists.push(long_term);
+
+    Ok(TopArtistResults {
+        top_artist_results: top_artists,
+    })
 }
