@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
@@ -6,18 +9,17 @@ use ratatui::{
     Frame,
 };
 
-use rspotify::{model::TimeRange, AuthCodeSpotify};
+use rspotify::model::TimeRange;
 
-use crate::client::{Client, TopArtist, TopTracks};
+use crate::client::{TopArtistResult, TopTrackResult};
 
 pub struct Model {
     pub running_state: RunningState,
     pub time_range: TimeRange,
-    pub display_name: String,
+    pub username: String,
     pub limit: usize,
-    pub client: AuthCodeSpotify,
-    pub top_tracks: Vec<TopTracks>,
-    pub top_artists: Vec<TopArtist>,
+    pub top_tracks: Vec<TopTrackResult>,
+    pub top_artists: Vec<TopArtistResult>,
     pub scrollbar_state: ScrollbarState,
     pub scroll_position: usize,
 }
@@ -25,15 +27,14 @@ pub struct Model {
 impl Model {
     pub fn new() -> Model {
         Model {
-            running_state: RunningState::Running,
-            display_name: "None".to_string(),
+            running_state: RunningState::Done,
+            username: "None".to_string(),
             limit: 10,
             scrollbar_state: ScrollbarState::default(),
             scroll_position: 0,
             top_tracks: Vec::new(),
             top_artists: Vec::new(),
             time_range: TimeRange::ShortTerm,
-            client: AuthCodeSpotify::default(),
         }
     }
 
@@ -52,8 +53,7 @@ impl Model {
         widget
     }
 
-    pub fn parse_top_tracks_output(&self) -> Text {
-        // TODO: Refactor function to handle all top track outputs in TopTracks struct.
+    pub fn parse_top_tracks_output(&mut self) -> Text {
         let mut lines = Text::default();
 
         for result in &self.top_artists {
@@ -84,7 +84,7 @@ impl Model {
         }
         lines
     }
-    pub fn parse_top_artists_output(&self) -> Text {
+    pub fn parse_top_artists_output(&mut self) -> Text {
         let mut lines = Text::default();
 
         for track in &self.top_artists {
@@ -111,11 +111,11 @@ impl Model {
         lines
     }
 
-    fn show_time_range(&self) -> Title<'_> {
-        match self.time_range {
-            TimeRange::ShortTerm => Title::from("Short Term"),
-            TimeRange::MediumTerm => Title::from("Medium Term"),
-            TimeRange::LongTerm => Title::from("Long Term"),
+    fn show_time_range(time_range: &TimeRange) -> String {
+        match time_range {
+            TimeRange::ShortTerm => "Short Term".to_string(),
+            TimeRange::MediumTerm => "Medium Term".to_string(),
+            TimeRange::LongTerm => "Long Term".to_string(),
         }
     }
 }
@@ -137,7 +137,6 @@ pub enum RunningState {
 pub enum Message {
     ScrollUp,
     ScrollDown,
-    ChangeTimeRange,
     Quit,
 }
 
@@ -152,19 +151,13 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
             model.scrollbar_state = model.scrollbar_state.position(model.scroll_position)
         }
         Message::Quit => model.running_state = RunningState::Done,
-        Message::ChangeTimeRange => match model.time_range {
-            TimeRange::LongTerm => model.time_range = TimeRange::ShortTerm,
-            TimeRange::MediumTerm => model.time_range = TimeRange::LongTerm,
-            TimeRange::ShortTerm => model.time_range = TimeRange::MediumTerm,
-        },
     };
     None
 }
 
-pub fn render_top_tracks_widget(model: &mut Model, frame: &mut Frame, area: Rect) {
+pub fn render_top_tracks(model: &mut Model, frame: &mut Frame, area: Rect) {
     let style = Style::new().green();
 
-    let title = model.show_time_range();
     let output = model.parse_top_tracks_output();
 
     let widget = Paragraph::new(output)
@@ -172,7 +165,6 @@ pub fn render_top_tracks_widget(model: &mut Model, frame: &mut Frame, area: Rect
         .block(
             Block::bordered()
                 .border_type(BorderType::QuadrantInside)
-                .title(title)
                 .border_style(style)
                 .title_alignment(Alignment::Center),
         )
@@ -182,34 +174,35 @@ pub fn render_top_tracks_widget(model: &mut Model, frame: &mut Frame, area: Rect
     frame.render_widget(widget, area);
 }
 
-pub fn render_top_artists_widget(model: &mut Model, frame: &mut Frame, area: Rect) {
-    let style = Style::new().green();
-
-    let title = model.show_time_range();
-    let output = model.parse_top_artists_output();
-
-    let widget = Paragraph::new(output)
-        .scroll((0, 0))
-        .block(
-            Block::bordered()
-                .border_type(BorderType::QuadrantInside)
-                .title(title)
-                .border_style(style)
-                .title_alignment(Alignment::Center),
-        )
-        .wrap(Wrap { trim: true })
-        .centered();
-
-    frame.render_widget(widget, area);
-}
-
-pub fn view(model: &mut Model, frame: &mut Frame) {
+pub fn draw(model: &mut Model, frame: &mut Frame) {
     let layout = Layout::new(
         Direction::Vertical,
         vec![Constraint::Fill(1), Constraint::Fill(1)],
     )
     .split(frame.area());
 
-    render_top_tracks_widget(model, frame, layout[0]);
-    render_top_artists_widget(model, frame, layout[1])
+    render_top_tracks(model, frame, layout[0]);
+}
+/// Convert Event to Message
+///
+/// We don't need to pass in a `model` to this function in this example
+/// but you might need it as your project evolves
+fn handle_event(_: &Model) -> color_eyre::Result<Option<Message>> {
+    if event::poll(Duration::from_millis(250))? {
+        if let Event::Key(key) = event::read()? {
+            if key.kind == event::KeyEventKind::Press {
+                return Ok(handle_key(key));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn handle_key(key: event::KeyEvent) -> Option<Message> {
+    match key.code {
+        KeyCode::Char('j') => Some(Message::ScrollDown),
+        KeyCode::Char('k') => Some(Message::ScrollUp),
+        KeyCode::Char('q') => Some(Message::Quit),
+        _ => None,
+    }
 }

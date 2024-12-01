@@ -23,15 +23,6 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new() -> Client {
-        Client {
-            creds: Credentials {
-                id: String::from(""),
-                secret: Some(String::from("")),
-            },
-            redirect_uri: String::from(""),
-        }
-    }
     pub async fn auth(&self) -> Option<AuthCodeSpotify> {
         let oauth = match OAuth::from_env(scopes!("user-top-read")) {
             Some(oauth) => oauth,
@@ -52,12 +43,6 @@ impl Client {
         }
 
         Some(spotify)
-    }
-}
-
-impl Default for Client {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
